@@ -4,6 +4,7 @@ import sys, os
 from datetime import datetime
 from matplotlib import pyplot
 
+data_type = np.longdouble
 
 def quadratic_error(result, expected):
     return np.sum(np.power(result - expected, 2), 1) / 2
@@ -34,7 +35,7 @@ def identity(integrated):
 
 
 def identity_back(integrated, activated):
-    return np.ones(integrated.shape)
+    return np.ones(integrated.shape, dtype=data_type)
 
 
 def with_bias(arr):
@@ -60,13 +61,13 @@ class NeuralNet:
 
     def add_layer(self, size, activator, back_activator):
         if len(self.weights) == 0:
-            self.weights.append(2 * np.random.sample((self.inputs + 1, size)) - 1)
+            self.weights.append(2 * np.random.sample((self.inputs + 1, size)).astype(data_type) - 1)
         else:
             last = self.weights[-1]
-            self.weights.append(2 * np.random.sample((last.shape[1] + 1, size)) - 1)
+            self.weights.append(2 * np.random.sample((last.shape[1] + 1, size)).astype(data_type) - 1)
         self.activators.append(activator)
         self.back_activators.append(back_activator)
-        self.last_delta.append(np.zeros(self.weights[-1].shape))
+        self.last_delta.append(np.zeros(self.weights[-1].shape, dtype=data_type))
 
 
     def propagate(self, input, target, error_back=quadratic_error_back):
@@ -174,48 +175,48 @@ output_folder = './out'
 nets = 1
 
 for i in range(nets):
-    stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    path = '{}/{}/'.format(output_folder, stamp)
-    os.makedirs(path)
-    # path = None
+    # stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    # path = '{}/{}/'.format(output_folder, stamp)
+    # os.makedirs(path)
+    path = None
 
     # create samples
-    samples = np.linspace(-10, 10, 1001)
+    samples = np.linspace(-10, 10, 1001, dtype=data_type)
     targets = target_function(samples)
 
-    samples_vec = np.array([[e] for e in samples])
-    targets_vec = np.array([[e] for e in targets])
+    samples_vec = np.array([[e] for e in samples], dtype=data_type)
+    targets_vec = np.array([[e] for e in targets], dtype=data_type)
 
     # create net
     net = NeuralNet(1)
     # net.add_layer(100, fermi, fermi_back)
     # net.add_layer(100, fermi, fermi_back)
-    net.add_layer(40, capped_fermi, fermi_back)
+    net.add_layer(20, capped_fermi, fermi_back)
     net.add_layer(1, identity, identity_back)
 
-    generations = 1000000
-    learn_rate = .00001
-    momentum = 0.5
+    generations = 10000
+    learn_rate = .001
+    momentum = 0
 
     save_weights(net, path, 'weights_1.txt')
 
-    # # before training
-    # computed = net.compute(samples_vec)
-    # draw_results(computed, samples, targets, 'Before training', path, 'graph_1.png')
-    #
-    # # save weights
-    # stored_weights = np.copy(net.weights)
-    #
-    # # training only second layer
-    # avg_error = net.train(samples_vec, targets_vec, generations, learn_rate, 1)
-    # draw_error(avg_error, 'After training only second layer', path, 'graph_2.png')
-    # computed = net.compute(samples_vec)
-    # draw_results(computed, samples, targets, 'After training only second layer', path, 'graph_3.png')
-    #
-    # save_weights(net, path, 'weights_2.txt')
-    #
-    # # reset net
-    # net.weights = stored_weights
+    # before training
+    computed = net.compute(samples_vec)
+    draw_results(computed, samples, targets, 'Before training', path, 'graph_1.png')
+
+    # save weights
+    stored_weights = np.copy(net.weights)
+
+    # training only second layer
+    avg_error = net.train(samples_vec, targets_vec, generations, learn_rate, 1)
+    draw_error(avg_error, 'After training only second layer', path, 'graph_2.png')
+    computed = net.compute(samples_vec)
+    draw_results(computed, samples, targets, 'After training only second layer', path, 'graph_3.png')
+
+    save_weights(net, path, 'weights_2.txt')
+
+    # reset net
+    net.weights = stored_weights
 
     if path is not None:
         with open(path + 'meta.txt', 'w') as file:
