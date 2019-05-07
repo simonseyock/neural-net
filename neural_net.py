@@ -50,72 +50,61 @@ def average_quadratic_error(computed, targets):
     return np.sum(quadratic_error(computed, targets)) / len(samples)
 
 
+class Layer:
+    def propagate(self, inputs):
+        pass
+
+    def back_propagate(self, back_inputs):
+        pass
+
+    def train(self, learn_rate):
+        pass
+
+    def calculate(self, inputs):
+        pass
+
+
+class SumLayer:
+    def __init__(self, in_size, out_size, activator, back_activator):
+        self.weights = 2 * np.random.sample((in_size + 1, out_size)).astype(data_type) - 1)
+        self.activator = activator
+        self.back_activator = back_activator
+        self.last_delta = None
+
+    def propagate(self, inputs):
+        self.integrated = with_bias(inputs) @ self.weights
+        self.activated = self.activator(self.integrated)
+        return self.activated
+
+    def calculate(self, inputs):
+        return self.activator(with_bias(inputs) @ self.weights)
+
+    def back_propagate(self, back_inputs):
+        weights_without_bias = np.delete(self.weights, 0, 0)
+        diffed = self.back_activator(self.integrated, self.activated)
+        self.back_propagated = diffed * (weights_without_bias @ back_inputs.T).T
+        return self.back_propagated
+
+    def train(self, learn_rate, momentum=.0):
+        delta = -learn_rate * with_bias(self.activated).T @ self.back_propagated
+        if momentum != .0 and self.last_delta is not None:
+            delta += momentum * self.last_delta
+        self.last_delta = delta
+        self.weights += delta
+
+
 class NeuralNet:
     def __init__(self, inputs):
         self.inputs = inputs
-        self.weights = []
-        self.activators = []
-        self.back_activators = []
-        self.last_delta = []
+        self.layers = []
 
 
-    def add_layer(self, size, activator, back_activator):
-        if len(self.weights) == 0:
-            self.weights.append(2 * np.random.sample((self.inputs + 1, size)).astype(data_type) - 1)
-        else:
-            last = self.weights[-1]
-            self.weights.append(2 * np.random.sample((last.shape[1] + 1, size)).astype(data_type) - 1)
-        self.activators.append(activator)
-        self.back_activators.append(back_activator)
-        self.last_delta.append(np.zeros(self.weights[-1].shape, dtype=data_type))
+    def add_layer(self, layer):
+        self.layers.append(layer)
 
 
-    def propagate(self, input, target, error_back=quadratic_error_back):
-        layers = len(self.weights)
+    def train_cycle(self, samples, targets, lern_rate, momentum=.1, train_layer=None):
 
-        integrated = []
-        activated = [input]
-        back_propagated = [None] * layers
-
-        for i in range(layers):
-            # integration
-            integrated.append(with_bias(activated[i]) @ self.weights[i])
-
-            # activation
-            activated.append(self.activators[i](integrated[i]))
-
-        # back propagation
-        back_propagated[layers - 1] = error_back(activated[-1], target)
-
-        for i in range(layers - 2, -1, -1):
-            weights_without_bias = np.delete(self.weights[i + 1], 0, 0)
-            diffed = self.back_activators[i](integrated[i], activated[i + 1])
-            back_propagated[i] = diffed * (weights_without_bias @ back_propagated[i + 1].T).T
-
-        return activated, back_propagated
-
-
-    def adjust_weights(self, learn_rate, results, layer=None, momentum=0.):
-        if layer is None:
-            for i in range(len(self.weights)):
-                self.adjust_weights(learn_rate, results, i, momentum)
-        else:
-            activated, back_propagated = results
-            delta = -learn_rate * with_bias(activated[layer]).T @ back_propagated[layer] + momentum * self.last_delta[layer]
-            self.last_delta[layer] = delta
-            self.weights[layer] += delta
-
-
-    def compute(self, input):
-        values = input
-        for i in range(len(self.weights)):
-            # integration
-            values = with_bias(values) @ self.weights[i]
-
-            # activation
-            values = self.activators[i](values)
-
-        return values
 
 
     def train(self, samples, target, generations, learn_rate, layer=None, momentum=0.0):
