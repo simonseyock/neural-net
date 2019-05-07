@@ -47,7 +47,11 @@ def target_function(x):
 
 
 def average_quadratic_error(computed, targets):
-    return np.sum(quadratic_error(computed, targets)) / len(samples)
+    return np.sum(quadratic_error(computed, targets)) / computed.shape[0]
+
+
+def gauss(integrated):
+    return np.exp(-integrated ** 2 / 2)
 
 
 class Layer:
@@ -64,14 +68,15 @@ class Layer:
         pass
 
 
-class SumLayer:
+class SumLayer(Layer):
     def __init__(self, in_size, out_size, activator, back_activator):
-        self.weights = 2 * np.random.sample((in_size + 1, out_size)).astype(data_type) - 1)
+        self.weights = 2 * np.random.sample((in_size + 1, out_size)).astype(data_type) - 1
         self.activator = activator
         self.back_activator = back_activator
         self.last_delta = None
 
     def propagate(self, inputs):
+        self.inputs = inputs
         self.integrated = with_bias(inputs) @ self.weights
         self.activated = self.activator(self.integrated)
         return self.activated
@@ -80,146 +85,90 @@ class SumLayer:
         return self.activator(with_bias(inputs) @ self.weights)
 
     def back_propagate(self, back_inputs):
+        self.back_inputs = back_inputs
         weights_without_bias = np.delete(self.weights, 0, 0)
         diffed = self.back_activator(self.integrated, self.activated)
-        self.back_propagated = diffed * (weights_without_bias @ back_inputs.T).T
+        self.back_propagated = diffed * (back_inputs @ weights_without_bias.T)
         return self.back_propagated
 
-    def train(self, learn_rate, momentum=.0):
-        delta = -learn_rate * with_bias(self.activated).T @ self.back_propagated
+    def learn(self, learn_rate, momentum=.0):
+        delta = -learn_rate * (with_bias(self.inputs).T @ self.back_inputs)
         if momentum != .0 and self.last_delta is not None:
             delta += momentum * self.last_delta
         self.last_delta = delta
         self.weights += delta
 
 
+class DistanceLayer(Layer):
+    def __init__(self, weights, activator):
+        self.weights = weights
+        self.activator = activator
+
+    def propagate(self, inputs):
+        return self.calculate(inputs)
+
+    def calculate(self, inputs):
+        return self.activator(np.linalg.norm(inputs - self.weights[0]))
+
+    def back_propagate(self, back_inputs):
+        pass
+
+    def learn(self, learn_rate, momentum=.0):
+        pass
+
 class NeuralNet:
     def __init__(self, inputs):
         self.inputs = inputs
         self.layers = []
 
-
     def add_layer(self, layer):
         self.layers.append(layer)
 
+    def train_step(self, samples, targets, learn_rate, error_back = quadratic_error_back, momentum = .1, train_layer = None):
+        calculation = samples
+        for layer in self.layers:
+            calculation = layer.propagate(calculation)
 
-    def train_cycle(self, samples, targets, lern_rate, momentum=.1, train_layer=None):
+        calculation = error_back(calculation, targets)
+        for layer in reversed(self.layers):
+            calculation = layer.back_propagate(calculation)
 
-
-
-    def train(self, samples, target, generations, learn_rate, layer=None, momentum=0.0):
-        avg_error = []
-
-        print('training {} generations with learn rate {}'.format(generations, learn_rate), end='')
-        if momentum != 0.0:
-            print(' and momentum factor {}'.format(momentum))
+        if train_layer is None:
+            for layer in self.layers:
+                layer.learn(learn_rate, momentum=momentum)
         else:
-            print('')
+            train_layer.learn(learn_rate, momentum=momentum)
 
-        for i in range(generations):
-            results = self.propagate(samples, target)
-            computed = results[0][-1]
-            avg_error.append(average_quadratic_error(computed, target))
-            self.adjust_weights(learn_rate, results, layer, momentum)
-            if i % 1000 == 0:
-                print ('\r{:>3}%'.format(int(i * 100 / generations)), end='')
-                sys.stdout.flush()
-
-        computed = self.compute(samples)
-        avg_error.append(average_quadratic_error(computed, target))
-        print('\r100%')
-        return avg_error
+    def calculate(self, input):
+        calculation = input
+        for layer in self.layers:
+            calculation = layer.calculate(calculation)
+        return calculation
 
 
-def draw_results(computed, samples, targets, title, path, file):
-    pyplot.axes(xlim=(-10, 10))
-    pyplot.plot(samples, computed, '.')
-    pyplot.plot(samples, targets, '.')
-    pyplot.suptitle('{}\naverage quadratic error: {}'.format(title, average_quadratic_error(computed, targets_vec)))
-    if path is not None:
-        pyplot.savefig(path + file, bbox_inches='tight')
-    else:
-        pyplot.show()
+def learn_full_batches(net, samples, targets, epochs, learn_rate, momentum=.0):
+    print('training full batches with size {} in {} epochs with learn rate {}'.format(samples.shape[0], epochs, learn_rate))
+    avg_error = [average_quadratic_error(net.calculate(samples), targets)]
+    for i in range(epochs):
+        net.train_step(samples, targets, learn_rate, momentum=momentum)
+        avg_error.append(average_quadratic_error(net.calculate(samples), targets))
+        if i % 1000 == 0:
+            print('\r{:>3}%'.format(int(i * 100 / epochs)), end='')
+            sys.stdout.flush()
+    print('\r100%')
+    return avg_error
 
 
-def draw_error(avg_error, title, path, file):
-    # show development of quadratic error
-    generations = len(avg_error)
-    gen_space = np.arange(0, generations, 1)
-    pyplot.axes(xlim=(0, generations - 1), yscale='log', ylim=(0.01, 1))
-    pyplot.plot(gen_space, avg_error)
-    pyplot.suptitle('{}\ndevelopment of average quadratic error\nlog scale'.format(title))
-    if path is not None:
-        pyplot.savefig(path + file, bbox_inches='tight')
-    else:
-        pyplot.show()
-
-
-def save_weights(net, path, file):
-    if path is not None:
-        np.save(path + file, net.weights)
-
-
-output_folder = './out'
-nets = 1
-
-for i in range(nets):
-    # stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    # path = '{}/{}/'.format(output_folder, stamp)
-    # os.makedirs(path)
-    path = None
-
-    # create samples
-    samples = np.linspace(-10, 10, 1001, dtype=data_type)
-    targets = target_function(samples)
-
-    samples_vec = np.array([[e] for e in samples], dtype=data_type)
-    targets_vec = np.array([[e] for e in targets], dtype=data_type)
-
-    # create net
-    net = NeuralNet(1)
-    # net.add_layer(100, fermi, fermi_back)
-    # net.add_layer(100, fermi, fermi_back)
-    net.add_layer(20, capped_fermi, fermi_back)
-    net.add_layer(1, identity, identity_back)
-
-    generations = 10000
-    learn_rate = .001
-    momentum = 0
-
-    save_weights(net, path, 'weights_1.txt')
-
-    # before training
-    computed = net.compute(samples_vec)
-    draw_results(computed, samples, targets, 'Before training', path, 'graph_1.png')
-
-    # save weights
-    stored_weights = np.copy(net.weights)
-
-    # training only second layer
-    avg_error = net.train(samples_vec, targets_vec, generations, learn_rate, 1)
-    draw_error(avg_error, 'After training only second layer', path, 'graph_2.png')
-    computed = net.compute(samples_vec)
-    draw_results(computed, samples, targets, 'After training only second layer', path, 'graph_3.png')
-
-    save_weights(net, path, 'weights_2.txt')
-
-    # reset net
-    net.weights = stored_weights
-
-    if path is not None:
-        with open(path + 'meta.txt', 'w') as file:
-            file.write('layers: {}\n'.format('-'.join([str(net.weights[0].shape[0] - 1)] + [str(w.shape[1]) for w in net.weights])))
-            file.write('generations: {}\n'.format(generations))
-            file.write('learn_rate: {}\n'.format(learn_rate))
-            file.write('momentum: {}\n'.format(momentum))
-            if net.activators[0] == capped_fermi:
-                file.write('using capped fermi\n')
-
-    # training both layers
-    avg_error = net.train(samples_vec, targets_vec, generations, learn_rate, momentum=0.5)
-    draw_error(avg_error, 'After training both layers', path, 'graph_4.png')
-    computed = net.compute(samples_vec)
-    draw_results(computed, samples, targets, 'After training both layers', path, 'graph_5.png')
-
-    save_weights(net, path, 'weights_3.txt')
+def learn_random_order(net, samples, targets, epochs, learn_rate, momentum=.0):
+    print('training {} samples in random order in {} epochs with learn rate {}'.format(samples.shape[0], epochs,
+                                                                  learn_rate))
+    avg_error = [average_quadratic_error(net.calculate(samples), targets)]
+    for i in range(epochs):
+        for j in np.random.permutation(samples.shape[0]):
+            net.train_step(samples[j:j+1], targets[j:j+1], learn_rate, momentum=momentum)
+        avg_error.append(average_quadratic_error(net.calculate(samples), targets))
+        if i % 10 == 0:
+            print('\r{:>3}%'.format(int(i * 100 / epochs)), end='')
+            sys.stdout.flush()
+    print('\r100%')
+    return avg_error

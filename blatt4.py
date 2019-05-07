@@ -1,6 +1,7 @@
-
 import numpy as np
 from matplotlib import pyplot
+
+from neural_net import *
 
 def draw_target(class1, class2, title, path, file):
     # pyplot.axes(xlim=(-10, 10))
@@ -22,10 +23,15 @@ u = np.arange(1, 201)
 class1 = np.stack((2 + np.sin(.2 * u + 8) * np.sqrt(u + 10), -1 + np.cos(.2 * u + 8) * np.sqrt(u + 10)))
 class2 = np.stack((2 + np.sin(.2 * u - 8) * np.sqrt(u + 10), -1 + np.cos(.2 * u - 8) * np.sqrt(u + 10)))
 
-pyplot.subplot(2, 1, 1)
-draw_target(class1, class2, 'cartesian coordinates', path, 'targets.png')
+# pyplot.subplot(2, 1, 1)
+# draw_target(class1, class2, 'cartesian coordinates', path, 'targets.png')
+#
+# pyplot.subplot(2, 1, 2)
+# draw_target(to_polar(class1), to_polar(class2), 'polar coordinates', path, 'targets.png')
+#
+# pyplot.show()
 
-pyplot.subplot(2, 1, 2)
-draw_target(to_polar(class1), to_polar(class2), 'polar coordinates', path, 'targets.png')
+# random_weights = np.random.sample((2, 25)) *
 
-pyplot.show()
+net = NeuralNet(2)
+# net.add_layer(DistanceLayer())
