@@ -1,23 +1,14 @@
 from neural_net import *
 
+def target_function(x):
+    return np.sin(x / 2) + np.cos(3 / (np.abs(x) + .1)) + .3 * x
+
+
 def draw_results(computed, samples, targets, title, path, file):
     pyplot.axes(xlim=(-10, 10))
     pyplot.plot(samples, computed, '.')
     pyplot.plot(samples, targets, '.')
     pyplot.suptitle('{}\naverage quadratic error: {}'.format(title, average_quadratic_error(computed, targets_vec)))
-    if path is not None:
-        pyplot.savefig(path + file, bbox_inches='tight')
-    else:
-        pyplot.show()
-
-
-def draw_error(avg_error, title, path, file):
-    # show development of quadratic error
-    generations = len(avg_error)
-    gen_space = np.arange(0, generations, 1)
-    pyplot.axes(xlim=(0, generations - 1), yscale='log', ylim=(0.01, 1))
-    pyplot.plot(gen_space, avg_error)
-    pyplot.suptitle('{}\ndevelopment of average quadratic error\nlog scale'.format(title))
     if path is not None:
         pyplot.savefig(path + file, bbox_inches='tight')
     else:

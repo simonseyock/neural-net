@@ -4,6 +4,8 @@ import sys, os
 from datetime import datetime
 from matplotlib import pyplot
 
+np.seterr(all='raise')
+
 data_type = np.longdouble
 
 def quadratic_error(result, expected):
@@ -38,13 +40,11 @@ def identity_back(integrated, activated):
     return np.ones(integrated.shape, dtype=data_type)
 
 
+def tanh_back(integrated, activated):
+    return 1 / np.cosh(integrated)**2
+
 def with_bias(arr):
     return np.insert(arr, 0, 1, 1)
-
-
-def target_function(x):
-    return np.sin(x / 2) + np.cos(3 / (np.abs(x) + .1)) + .3 * x
-
 
 def average_quadratic_error(computed, targets):
     return np.sum(quadratic_error(computed, targets)) / computed.shape[0]
@@ -88,7 +88,7 @@ class SumLayer(Layer):
         self.back_inputs = back_inputs
         weights_without_bias = np.delete(self.weights, 0, 0)
         diffed = self.back_activator(self.integrated, self.activated)
-        self.back_propagated = diffed * (back_inputs @ weights_without_bias.T)
+        self.back_propagated = (diffed * back_inputs) @ weights_without_bias.T
         return self.back_propagated
 
     def learn(self, learn_rate, momentum=.0):
@@ -97,6 +97,7 @@ class SumLayer(Layer):
             delta += momentum * self.last_delta
         self.last_delta = delta
         self.weights += delta
+        self.weights[np.isclose(self.weights, 0)] = 0
 
 
 class DistanceLayer(Layer):
@@ -108,7 +109,8 @@ class DistanceLayer(Layer):
         return self.calculate(inputs)
 
     def calculate(self, inputs):
-        return self.activator(np.linalg.norm(inputs - self.weights[0]))
+        s = self.weights.shape
+        return np.array([np.linalg.norm(inp.reshape((s[0], 1)) @ np.ones((1, s[1])) - self.weights, axis=0) for inp in inputs])
 
     def back_propagate(self, back_inputs):
         pass
@@ -125,19 +127,22 @@ class NeuralNet:
         self.layers.append(layer)
 
     def train_step(self, samples, targets, learn_rate, error_back = quadratic_error_back, momentum = .1, train_layer = None):
-        calculation = samples
-        for layer in self.layers:
-            calculation = layer.propagate(calculation)
-
-        calculation = error_back(calculation, targets)
-        for layer in reversed(self.layers):
-            calculation = layer.back_propagate(calculation)
-
-        if train_layer is None:
+        try:
+            calculation = samples
             for layer in self.layers:
-                layer.learn(learn_rate, momentum=momentum)
-        else:
-            train_layer.learn(learn_rate, momentum=momentum)
+                calculation = layer.propagate(calculation)
+
+            calculation = error_back(calculation, targets)
+            for layer in reversed(self.layers):
+                calculation = layer.back_propagate(calculation)
+
+            if train_layer is None:
+                for layer in self.layers:
+                    layer.learn(learn_rate, momentum=momentum)
+            else:
+                train_layer.learn(learn_rate, momentum=momentum)
+        except:
+            raise
 
     def calculate(self, input):
         calculation = input
@@ -172,3 +177,16 @@ def learn_random_order(net, samples, targets, epochs, learn_rate, momentum=.0):
             sys.stdout.flush()
     print('\r100%')
     return avg_error
+
+
+def draw_error(avg_error, title, path = None, file = 'avg_error.png'):
+    # show development of quadratic error
+    generations = len(avg_error)
+    gen_space = np.arange(0, generations, 1)
+    pyplot.axes(xlim=(0, generations - 1), yscale='log', ylim=(0.01, 1))
+    pyplot.plot(gen_space, avg_error)
+    pyplot.suptitle('{}\ndevelopment of average quadratic error\nlog scale'.format(title))
+    if path is not None:
+        pyplot.savefig(path + file, bbox_inches='tight')
+    else:
+        pyplot.show()
