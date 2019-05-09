@@ -50,8 +50,11 @@ def average_quadratic_error(computed, targets):
     return np.sum(quadratic_error(computed, targets)) / computed.shape[0]
 
 
-def gauss(integrated):
-    return np.exp(-integrated ** 2 / 2)
+def gauss(integrated, variance):
+    intermediate = -(integrated ** 2) / (2 * variance ** 2)
+    result = np.zeros(integrated.shape)
+    result[np.abs(intermediate) < 100] = np.exp(intermediate[np.abs(intermediate) < 100])
+    return result
 
 
 class Layer:
@@ -101,16 +104,18 @@ class SumLayer(Layer):
 
 
 class DistanceLayer(Layer):
-    def __init__(self, weights, activator):
+    def __init__(self, weights, variances, activator):
         self.weights = weights
         self.activator = activator
+        self.variances = variances
 
     def propagate(self, inputs):
         return self.calculate(inputs)
 
     def calculate(self, inputs):
         s = self.weights.shape
-        return np.array([np.linalg.norm(inp.reshape((s[0], 1)) @ np.ones((1, s[1])) - self.weights, axis=0) for inp in inputs])
+        distances = np.array([np.linalg.norm(inp.reshape((s[0], 1)) @ np.ones((1, s[1])) - self.weights, axis=0) for inp in inputs])
+        return self.activator(distances, self.variances)
 
     def back_propagate(self, back_inputs):
         pass
@@ -183,7 +188,7 @@ def draw_error(avg_error, title, path = None, file = 'avg_error.png'):
     # show development of quadratic error
     generations = len(avg_error)
     gen_space = np.arange(0, generations, 1)
-    pyplot.axes(xlim=(0, generations - 1), yscale='log', ylim=(0.01, 1))
+    pyplot.axes(xlim=(0, generations - 1), yscale='log')
     pyplot.plot(gen_space, avg_error)
     pyplot.suptitle('{}\ndevelopment of average quadratic error\nlog scale'.format(title))
     if path is not None:
